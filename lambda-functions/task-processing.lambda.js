@@ -43,11 +43,20 @@ class FinalMessageHandler {
   }
 
   async #processFailedMessages() {
-    const Entries = this.#messages[FinalMessageHandler.MessageType.failed].map(
+    const currentQueueVisibilityTimeout =
+      await this.#getQeueuVisibilityTimeout();
+
+    const messages = this.#messages[FinalMessageHandler.MessageType.failed].map(
       (message) => {
         const VisibilityTimeout =
-          this.#getQeueuVisibilityTimeout *
-          (message.Attributes.ApproximateReceiveCount || 1);
+          currentQueueVisibilityTimeout *
+          +(message.attributes?.ApproximateReceiveCount || 1);
+
+        console.log("visible timeouts", {
+          currentQueueVisibilityTimeout,
+          ApproximateReceiveCount: message.attributes?.ApproximateReceiveCount,
+          VisibilityTimeout,
+        });
         return {
           Id: message.messageId,
           ReceiptHandle: message.receiptHandle,
@@ -55,6 +64,8 @@ class FinalMessageHandler {
         };
       },
     );
+
+    await this.#changeVisibility(messages);
   }
 
   async processMessages() {
@@ -70,6 +81,7 @@ class FinalMessageHandler {
       AttributeNames: ["VisibilityTimeout"],
     });
     const response = await sqsClient.send(command);
+    console.log("response visibilityTimeout", JSON.stringify(response));
     return response?.Attributes?.VisibilityTimeout || 1;
   }
 
@@ -155,6 +167,8 @@ export const handler = async (event) => {
       );
     }
   }
+
+  await finalMessageHandler.processMessages();
 
   return `Successfully processed ${event.Records.length} messages.`;
 };
