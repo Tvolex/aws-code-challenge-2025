@@ -1,5 +1,7 @@
 # "org" ensures this Service is used with the correct Serverless Framework Access Key.
 org: tvolex
+# "app" enables Serverless Framework Dashboard features and sharing them with other Services.
+app: aws-code-challenge-2025
 service: aws-code-challenge-2025
 
 provider:
@@ -13,7 +15,7 @@ provider:
       Action:
         - sqs:SendMessage
       Resource:
-        - Fn::GetAtt: [TaskProcessingQueue, Arn]
+        - Fn::GetAtt: [taskProcessingQueue, Arn]
 
     - Effect: Allow
       Action:
@@ -22,17 +24,17 @@ provider:
          - sqs:GetQueueAttributes
          - sqs:ChangeMessageVisibility
       Resource:
-         - Fn::GetAtt: [TaskProcessingQueue, Arn]
+         - Fn::GetAtt: [taskProcessingQueue, Arn]
 
     - Effect: Allow
       Action:
         - sqs:ReceiveMessage
         - sqs:DeleteMessage
       Resource:
-        - Fn::GetAtt: [TaskDLQQueue, Arn]
+        - Fn::GetAtt: [taskDLQQueue, Arn]
 
 functions:
-  task-gateway:
+  TaskGatewayLambda:
     role: TaskGatewayRole
     handler: lambda-functions/task-gateway.lambda.js
     events:
@@ -40,7 +42,7 @@ functions:
           path: /api/v1/tasks
           method: POST
 
-  task-processing:
+  TaskProcessingLambda:
     handler: lambda-functions/task-processing.lambda.js
     role: TaskProcessingRole
     events:
@@ -50,15 +52,15 @@ functions:
               - taskProcessingQueue
               - Arn
           batchSize: 10
-    destinations:
-      onFailure:
-        type: sqs
-        arn:
-            Fn::GetAtt:
-              - taskDLQQueue
-              - Arn
+#    destinations:
+#      onFailure:
+#        type: sqs
+#        arn:
+#          Fn::GetAtt:
+#            - taskDLQQueue
+#            - Arn
 
-  task-dlq:
+  TaskDLQLambda:
     handler: lambda-functions/task-dlq.lambda.js
     role: TaskDLQRole
     events:
@@ -71,32 +73,35 @@ functions:
 
 resources:
   Resources:
+    taskDLQQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: task-dlq.fifo
+        FifoQueue: true
+
     taskProcessingQueue:
       Type: AWS::SQS::Queue
+      DependsOn:
+#          - TaskProcessingRole
+          - taskDLQQueue
       Properties:
         QueueName: task-processing.fifo
         FifoQueue: true
         VisibilityTimeout: 60
         RedrivePolicy:
-          arn:
-            Fn::Join:
-              - ':'
-              - - arn
-                - aws
-                - sqs
-                - Ref: AWS::Region::eu-central-1
-                - Ref: AWS::AccountId::650979641201
-                - taskDLQQueue
-#          Fn::GetAtt:
-#            - taskDLQQueue
-#            - Arn
           maxReceiveCount: 2
-
-    taskDLQQueue:
-        Type: AWS::SQS:Queue
-        Properties:
-          QueueName: task-dlq.fifo
-          FifoQueue: true
+          deadLetterTargetArn:
+#            Fn::Join:
+#                - ':'
+#                - - arn
+#                  - aws
+#                  - sqs
+#                  - Ref: AWS::Region #:eu-central-1
+#                  - Ref: AWS::AccountId #::650979641201
+#                  - taskDLQQueue
+            Fn::GetAtt:
+              - taskDLQQueue
+              - Arn
 
     TaskGatewayRole:
       Type: AWS::IAM::Role
@@ -106,7 +111,7 @@ resources:
           Statement:
             - Effect: Allow
               Principal:
-                Service: [lamda.amazonaws.com]
+                Service: [lambda.amazonaws.com]
               Action: sts:AssumeRole
         Policies:
           - PolicyName: SQSSendMessage
@@ -115,9 +120,10 @@ resources:
                 - Effect: Allow
                   Action:
                     - sqs:SendMessage
+                    - sqs:GetQueueAttributes
                   Resource:
                     Fn::GetAtt:
-                      - TaskProcessingQueue
+                      - taskProcessingQueue
                       - Arn
 
     TaskProcessingRole:
@@ -128,7 +134,7 @@ resources:
           Statement:
             - Effect: Allow
               Principal:
-                Service: [lamda.amazonaws.com]
+                Service: [lambda.amazonaws.com]
               Action: sts:AssumeRole
         Policies:
           - PolicyName: SQSProcessing
@@ -142,7 +148,15 @@ resources:
                     - sqs:ChangeMessageVisibility
                   Resource:
                     Fn::GetAtt:
-                      - TaskProcessingQueue
+                      - taskProcessingQueue
+                      - Arn
+                - Effect: Allow
+                  Action:
+                    - sqs:SendMessage
+                    - sqs:GetQueueAttributes
+                  Resource:
+                    Fn::GetAtt:
+                      - taskDLQQueue
                       - Arn
 
     TaskDLQRole:
@@ -153,7 +167,7 @@ resources:
           Statement:
             - Effect: Allow
               Principal:
-                Service: [lamda.amazonaws.com]
+                Service: [lambda.amazonaws.com]
               Action: sts:AssumeRole
         Policies:
           - PolicyName: SQSTaskDLQ
@@ -162,12 +176,13 @@ resources:
                 - Effect: Allow
                   Action:
                     - sqs:ReceiveMessage
+#                    - sqs:SendMessage
+                    - sqs:GetQueueAttributes
                     - sqs:DeleteMessage
                   Resource:
                       Fn::GetAtt:
-                        - TaskDLQQueue
+                        - taskDLQQueue
                         - Arn
-
 
 package:
   exclude:
