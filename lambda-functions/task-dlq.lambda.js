@@ -1,12 +1,14 @@
 import { SQSClient, DeleteMessageBatchCommand } from "@aws-sdk/client-sqs";
 
 const sqsClient = new SQSClient({});
+
+console.log("Loading task-dlq function");
+
 const deleteSuccessfulMessages = async (messages) => {
   if (!messages || !messages.length) return;
 
   const messageParams = {
-    QueueUrl:
-      "https://sqs.eu-central-1.amazonaws.com/650979641201/taskDLQ.fifo",
+    QueueUrl: process.env.TASK_DLQ_URL,
     Entries: messages,
   };
   const sendDeleteBatchCommand = new DeleteMessageBatchCommand(messageParams);

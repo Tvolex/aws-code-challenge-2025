@@ -5,11 +5,10 @@ import {
   GetQueueAttributesCommand,
 } from "@aws-sdk/client-sqs";
 
-const QueueUrl =
-  "https://sqs.eu-central-1.amazonaws.com/650979641201/TaskProcessingQueue.fifo";
+const QueueUrl = process.env.TASK_PROCESSING_QUEUE_URL;
 const sqsClient = new SQSClient({});
 
-console.log("Loading function");
+console.log("Loading task-processing function");
 
 class FinalMessageHandler {
   #commandRetryCount = 0;
@@ -75,6 +74,10 @@ class FinalMessageHandler {
     ]);
   }
 
+  hasFailedMessages() {
+    return !!this.#messages[FinalMessageHandler.MessageType.failed].length;
+  }
+
   async #getQeueuVisibilityTimeout() {
     const command = new GetQueueAttributesCommand({
       QueueUrl,
@@ -86,6 +89,8 @@ class FinalMessageHandler {
   }
 
   async #changeVisibility(messages) {
+    if (!messages?.length) return;
+
     const messageParams = {
       QueueUrl,
       Entries: messages,
@@ -97,7 +102,7 @@ class FinalMessageHandler {
   }
 
   async #deleteFromQueue(messages) {
-    if (!messages || !messages.length) return;
+    if (!messages?.length) return;
 
     const messageParams = {
       QueueUrl,
@@ -169,6 +174,11 @@ export const handler = async (event) => {
   }
 
   await finalMessageHandler.processMessages();
+
+  if (finalMessageHandler.hasFailedMessages()) {
+    throw new Error('Some messages failed processing, retrying...')
+  }
+
 
   return `Successfully processed ${event.Records.length} messages.`;
 };

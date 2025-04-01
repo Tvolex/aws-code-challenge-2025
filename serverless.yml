@@ -10,6 +10,7 @@ provider:
   region: eu-central-1
   memorySize: 256
 
+
   iamRoleStatements:
     - Effect: Allow
       Action:
@@ -33,18 +34,29 @@ provider:
       Resource:
         - Fn::GetAtt: [taskDLQQueue, Arn]
 
+
 functions:
   TaskGatewayLambda:
     role: TaskGatewayRole
-    handler: lambda-functions/task-gateway.lambda.js
+    handler: handler.taskGatewayHandler
+    logs:
+      logGroup: /aws/lambda/taskGatewayLogs
+    environment:
+      TASK_PROCESSING_QUEUE_URL:
+        Fn::Sub: "https://sqs.${AWS::Region}.amazonaws.com/${AWS::AccountId}/task-processing.fifo"
     events:
-      - http:
+      - httpApi:
           path: /api/v1/tasks
           method: POST
 
   TaskProcessingLambda:
-    handler: lambda-functions/task-processing.lambda.js
+    handler: handler.taskProcessingHandler
     role: TaskProcessingRole
+    logs:
+      logGroup: /aws/lambda/taskProcessingLogs
+    environment:
+      TASK_PROCESSING_QUEUE_URL:
+        Fn::Sub: "https://sqs.${AWS::Region}.amazonaws.com/${AWS::AccountId}/task-processing.fifo"
     events:
       - sqs:
           arn:
@@ -61,8 +73,13 @@ functions:
 #            - Arn
 
   TaskDLQLambda:
-    handler: lambda-functions/task-dlq.lambda.js
+    handler: handler.taskDlqHandler
     role: TaskDLQRole
+    logs:
+      logGroup: /aws/lambda/taskDLQLogs
+    environment:
+      TASK_DLQ_URL:
+        Fn::Sub: "https://sqs.${AWS::Region}.amazonaws.com/${AWS::AccountId}/task-dlq.fifo"
     events:
       - sqs:
           arn:
@@ -108,11 +125,16 @@ resources:
       Properties:
         RoleName: task-gateway-role
         AssumeRolePolicyDocument:
+          Version: "2012-10-17"
           Statement:
             - Effect: Allow
               Principal:
-                Service: [lambda.amazonaws.com]
-              Action: sts:AssumeRole
+                Service:
+                  - lambda.amazonaws.com
+              Action:
+                - sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         Policies:
           - PolicyName: SQSSendMessage
             PolicyDocument:
@@ -125,6 +147,23 @@ resources:
                     Fn::GetAtt:
                       - taskProcessingQueue
                       - Arn
+          - PolicyName: TaskGatewayPolicyLogger
+            PolicyDocument:
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - logs:CreateLogGroup
+                    - logs:CreateLogStream
+                    - logs:PutLogEvent
+                    - logs:TagResources
+                  Resource:
+                    - Fn::Join:
+                      - ':'
+                      -
+                        - 'arn:aws:logs'
+                        - Ref: 'AWS::Region'
+                        - Ref: 'AWS::AccountId'
+                        - 'log-group:/aws/lambda/taskGatewayLogs/*:*:*'
 
     TaskProcessingRole:
       Type: AWS::IAM::Role
@@ -136,6 +175,8 @@ resources:
               Principal:
                 Service: [lambda.amazonaws.com]
               Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         Policies:
           - PolicyName: SQSProcessing
             PolicyDocument:
@@ -158,6 +199,23 @@ resources:
                     Fn::GetAtt:
                       - taskDLQQueue
                       - Arn
+          - PolicyName: TaskProcessingPolicyLogger
+            PolicyDocument:
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - logs:CreateLogGroup
+                    - logs:CreateLogStream
+                    - logs:PutLogEvent
+                    - logs:TagResources
+                  Resource:
+                    - Fn::Join:
+                      - ':'
+                      -
+                        - 'arn:aws:logs'
+                        - Ref: 'AWS::Region'
+                        - Ref: 'AWS::AccountId'
+                        - 'log-group:/aws/lambda/taskProcessingLogs/*:*:*'
 
     TaskDLQRole:
       Type: AWS::IAM::Role
@@ -169,6 +227,8 @@ resources:
               Principal:
                 Service: [lambda.amazonaws.com]
               Action: sts:AssumeRole
+        ManagedPolicyArns:
+          - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         Policies:
           - PolicyName: SQSTaskDLQ
             PolicyDocument:
@@ -183,8 +243,25 @@ resources:
                       Fn::GetAtt:
                         - taskDLQQueue
                         - Arn
-
+          - PolicyName: TaskDLQPolicyLogger
+            PolicyDocument:
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - logs:CreateLogGroup
+                    - logs:CreateLogStream
+                    - logs:PutLogEvent
+                    - logs:TagResources
+                  Resource:
+                    - Fn::Join:
+                      - ':'
+                      -
+                        - 'arn:aws:logs'
+                        - Ref: 'AWS::Region'
+                        - Ref: 'AWS::AccountId'
+                        - 'log-group:/aws/lambda/taskDLQLogs/*:*:*'
 package:
+  individually: true
   exclude:
     - node_modules/**
     - git/**
