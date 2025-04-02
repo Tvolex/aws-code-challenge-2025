@@ -35,6 +35,6 @@ export const handler = async (event, context) => {
 
   return {
     taskId,
-    queueId: sentMessageInfo.MessageId,
+    messageId: sentMessageInfo.MessageId,
   };
 };

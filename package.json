@@ -16,7 +16,7 @@
   "homepage": "https://github.com/Tvolex/aws-code-challenge-2025#readme",
   "scripts": {
     "deploy": "serverless deploy",
-    "prettier:fix": "prettier -w lambda-functions"
+    "prettier:fix": "prettier -w lambda-functions modules"
   },
   "dependencies": {
     "@aws-sdk/client-sqs": "^3.777.0",
