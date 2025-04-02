@@ -176,9 +176,8 @@ export const handler = async (event) => {
   await finalMessageHandler.processMessages();
 
   if (finalMessageHandler.hasFailedMessages()) {
-    throw new Error('Some messages failed processing, retrying...')
+    throw new Error("Some messages failed processing, retrying...");
   }
-
 
   return `Successfully processed ${event.Records.length} messages.`;
 };

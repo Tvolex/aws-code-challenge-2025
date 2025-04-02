@@ -31,7 +31,7 @@ export const handler = async (event, context) => {
 
   const sendMessageCommand = new SendMessageCommand(messageParams);
   const sentMessageInfo = await sqsClient.send(sendMessageCommand);
-  console.log('sent message to the queue', {sentMessageInfo})
+  console.log("sent message to the queue", { sentMessageInfo });
 
   return {
     taskId,
