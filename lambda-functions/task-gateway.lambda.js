@@ -7,10 +7,12 @@ console.log("Loading task-gateway function");
 // taskId (string, unique)
 // payload (JSON object with arbitrary data)
 
-const sendToProcessing = async (messages) => {
+const sendToProcessing = async (messageParams) => {
   const sendMessageCommand = new SendMessageCommand(messageParams);
   const sentMessageInfo = await sqsClient.send(sendMessageCommand);
   console.log("sent message to the queue", { sentMessageInfo });
+
+  return sentMessageInfo;
 };
 
 export const handler = async (event, context) => {
