@@ -7,8 +7,18 @@ console.log("Loading task-gateway function");
 // taskId (string, unique)
 // payload (JSON object with arbitrary data)
 
+const sendToProcessing = async (messages) => {
+  const sendMessageCommand = new SendMessageCommand(messageParams);
+  const sentMessageInfo = await sqsClient.send(sendMessageCommand);
+  console.log("sent message to the queue", { sentMessageInfo });
+};
+
 export const handler = async (event, context) => {
   console.log("New message on API gateway", context.awsRequestId, event.body);
+
+  const QueueUrl = process.env.TASK_PROCESSING_QUEUE_URL;
+
+  if (!QueueUrl) throw new Error("Processing Queue URL missed");
 
   const body =
     event.body &&
@@ -22,19 +32,15 @@ export const handler = async (event, context) => {
     };
   }
 
-  const messageParams = {
-    QueueUrl: process.env.TASK_PROCESSING_QUEUE_URL,
+  const sentMessageResponse = await sendToProcessing({
+    QueueUrl,
     MessageBody: JSON.stringify({ taskId, payload }),
     MessageGroupId: context.awsRequestId,
     MessageDeduplicationId: context.awsRequestId,
-  };
-
-  const sendMessageCommand = new SendMessageCommand(messageParams);
-  const sentMessageInfo = await sqsClient.send(sendMessageCommand);
-  console.log("sent message to the queue", { sentMessageInfo });
+  });
 
   return {
     taskId,
-    messageId: sentMessageInfo.MessageId,
+    messageId: sentMessageResponse.MessageId,
   };
 };
